@@ -1,19 +1,8 @@
 # The Unofficial Guide
 
-<!-- Replace this line with your name and which corpus you picked. -->
+Author: Dara Bonakdar
 
-> **This file is your submission.** Fill it in as you go — most sections get
-> written during the milestone that produces them, not at the end.
->
-> How the starter works, and every command you'll need, is in `RUNNING.md`.
-> Leave that file alone.
->
-> **Paste everything as text.** No screenshots, no video. A typed table gets
-> full credit; a picture of the same table gets none.
->
-> Delete these instruction blocks as you replace them. The `<!-- -->` comments
-> are notes to you and don't show up when the page renders — you can leave them
-> or remove them.
+Corpus: campus_life
 
 ---
 
@@ -29,18 +18,17 @@
 
 ## Chunking Strategy
 
-**Chunk size:**
-**Overlap:**
 
-<!-- What about YOUR documents made you pick these numbers? Short posts and
-     long sectioned guides don't want the same chunking, and "800 seemed
-     reasonable" earns nothing. Point at something you noticed when you read
-     the documents in Milestone 1.
+**Chunk size:** 450 characters
+**Overlap:** 0 characters
 
-     If you changed your mind partway through, say so and say why. That's worth
-     more than pretending you got it right first time.
-
-     Milestone 3. -->
+The starter's 800-character windows produced 88 chunks for 88 documents,
+because nearly every campus-life post was shorter than 800 characters. I kept
+each post's paragraph structure and packed adjacent paragraphs up to 450
+characters. This keeps the short factual posts together while preventing a
+longer multi-topic post from becoming one oversized retrieval result. I used
+no overlap because the useful facts are normally complete within a paragraph,
+so duplicating text across chunks would add noise.
 
 ## Sample Chunks
 
