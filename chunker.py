@@ -22,10 +22,18 @@ to it, write down what you saw, and move on. That's a real observation about
 your pipeline, not giving up.
 """
 
+import re
 from dataclasses import dataclass
 
 import config
 from ingest import Document
+
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+")
+_MIN_FRAGMENT = 60
+
+
+def _split_sentences(text: str) -> list[str]:
+    return [s.strip() for s in _SENTENCE_BOUNDARY.split(text) if s.strip()]
 
 
 @dataclass
@@ -82,17 +90,31 @@ def fallback_split(
 
 def split_documents(documents: list[Document]) -> list[Chunk]:
     """
-    Split documents into semantic, paragraph-aware chunks tailored for campus_life.
+    Split documents into semantic, sentence-aware chunks tailored for campus_life.
+
+    Milestone 4 change: the previous version only ever cut between paragraphs,
+    and its "short enough to stay whole" cutoff (650 characters) and its
+    per-paragraph flush target (500 characters) were both well above every
+    document in this corpus (longest 549 characters, and most posts are a
+    single body paragraph after the heading) — so it never actually split
+    anything. This version lowers the target to SINGLE_CHUNK_LIMIT and splits
+    on sentence boundaries, not just paragraph boundaries, so a single long
+    paragraph can be divided too.
 
     Strategy:
     - Normalizes text and splits on paragraph boundaries (\n\n+).
     - Preserves heading context: if a document begins with a short heading,
-      that title context is attached to subsequent paragraphs so each chunk
-      stands independently.
-    - If a document is short (<= 650 characters), it remains a single coherent chunk.
-    - If paragraphs are long (> 650 characters), splits on sentence boundaries.
-    - Guards against small fragments (< 60 characters unless it's the only text).
+      that title is attached to every chunk after it so each one stands
+      independently.
+    - If a document is short (<= SINGLE_CHUNK_LIMIT characters), it stays one
+      coherent chunk.
+    - Otherwise, every body paragraph is broken into sentences, and sentences
+      are packed into chunks up to SINGLE_CHUNK_LIMIT characters.
+    - Guards against small fragments: a trailing piece under 60 characters is
+      merged onto the previous chunk instead of standing alone.
     """
+    SINGLE_CHUNK_LIMIT = 160
+
     chunks: list[Chunk] = []
 
     for doc in documents:
@@ -106,7 +128,7 @@ def split_documents(documents: list[Document]) -> list[Chunk]:
             continue
 
         # If document is short enough to fit comfortably in a single chunk, preserve whole
-        if len(raw_text) <= 650:
+        if len(raw_text) <= SINGLE_CHUNK_LIMIT:
             chunks.append(
                 Chunk(
                     text=raw_text,
@@ -124,14 +146,18 @@ def split_documents(documents: list[Document]) -> list[Chunk]:
             header = paras[0]
             body_paras = paras[1:]
 
+        sentences: list[str] = []
+        for para in body_paras:
+            sentences.extend(_split_sentences(para))
+
         doc_chunk_idx = 0
-        current_chunk_parts: list[str] = []
+        current_parts: list[str] = []
         current_len = 0
 
-        for para in body_paras:
-            # If adding this paragraph exceeds target size, flush current chunk
-            if current_chunk_parts and (current_len + len(para) > 500):
-                chunk_body = "\n\n".join(current_chunk_parts)
+        for sentence in sentences:
+            # If adding this sentence exceeds target size, flush current chunk
+            if current_parts and (current_len + len(sentence) > SINGLE_CHUNK_LIMIT):
+                chunk_body = " ".join(current_parts)
                 full_text = f"{header}\n\n{chunk_body}".strip() if header else chunk_body
                 chunks.append(
                     Chunk(
@@ -142,23 +168,27 @@ def split_documents(documents: list[Document]) -> list[Chunk]:
                     )
                 )
                 doc_chunk_idx += 1
-                current_chunk_parts = []
+                current_parts = []
                 current_len = 0
 
-            current_chunk_parts.append(para)
-            current_len += len(para)
+            current_parts.append(sentence)
+            current_len += len(sentence)
 
-        if current_chunk_parts:
-            chunk_body = "\n\n".join(current_chunk_parts)
+        if current_parts:
+            chunk_body = " ".join(current_parts)
             full_text = f"{header}\n\n{chunk_body}".strip() if header else chunk_body
-            chunks.append(
-                Chunk(
-                    text=full_text,
-                    source=doc.source,
-                    index=doc_chunk_idx,
-                    produced_by="chunker.py::split_documents",
+            if current_len < _MIN_FRAGMENT and doc_chunk_idx > 0:
+                # Too small to stand alone — merge onto the previous chunk.
+                chunks[-1].text = f"{chunks[-1].text} {chunk_body}".strip()
+            else:
+                chunks.append(
+                    Chunk(
+                        text=full_text,
+                        source=doc.source,
+                        index=doc_chunk_idx,
+                        produced_by="chunker.py::split_documents",
+                    )
                 )
-            )
 
     return chunks
 

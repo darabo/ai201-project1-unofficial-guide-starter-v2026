@@ -321,27 +321,83 @@ construction, not because retrieval is strong.
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** Rewrote `chunker.py::split_documents`. The old version
+only ever cut between paragraphs and used a 650/500-character size cutoff;
+since every document in `campus_life` is under 550 characters and almost all
+of them are a single body paragraph after the heading, that logic never
+actually split a document — 88 in, 88 out. The new version lowers the
+single-chunk cutoff to 160 characters and splits on **sentence** boundaries,
+not just paragraph boundaries, so a one-paragraph post can be divided too. It
+still attaches the heading to every resulting chunk and merges a trailing
+fragment under 60 characters onto the previous chunk rather than leaving it
+to stand alone. Re-indexing now produces 220 chunks from the same 88
+documents (avg 143 characters, down from 317).
 
-**Why I picked it:**
-
-<!-- Connect it to a specific diagnosis above in one sentence. If you can't,
-     you picked a fix because it sounded impressive. -->
+**Why I picked it:** This is exactly what the Milestone 3 diagnosis named —
+criteria 1 and 4 were MET only because the chunker never actually split
+anything, so neither one had ever been tested against a real chunk boundary.
+This change makes that boundary real and re-runs the same five criteria
+against it.
 
 ### Run Log — After
 
 <!-- Same format, same five criteria, three runs each.
      `python run_eval.py --label after` -->
 
-| Criterion                              | Target | Run 1 | Run 2 | Run 3 | Verdict |
-| -------------------------------------- | ------ | ----- | ----- | ----- | ------- |
-| 1. Retrieved chunk contains the answer | 4 of 5 |       |       |       |         |
-| 2. Every answer names a source         | 5 of 5 |       |       |       |         |
-| 3. Gate stops out-of-corpus questions  | 4 of 5 |       |       |       |         |
-| 4.                                     |        |       |       |       |         |
-| 5.                                     |        |       |       |       |         |
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Retrieved chunk contains the answer | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 2. Every answer names a source | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 3. Gate stops out-of-corpus questions | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 4. Sampled chunks read as complete thoughts | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| 5. Named source contains the expected phrase | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
 
-**Did it help?**
+Full per-question, per-run data: `results/run_2026-09-23_2149_after.md`.
+
+`python app.py retrieve` on the same 5 questions, post-rebuild:
+
+```
+When do parking permits go on sale?         → #1 admin_parking_permits.txt#0          distance 0.308
+What are the hours of the campus shuttle?   → #1 transit_shuttle.txt#0                distance 0.281
+What are the graduation requirements?       → #1 admin_graduation_requirements.txt#0  distance 0.274
+How much is the student shuttle?            → #1 transit_shuttle.txt#1                distance 0.523
+What is the deadline to drop a class        → #5 admin_add_drop_deadline.txt#1        distance 0.502
+```
+
+Four of the five answer-bearing chunks still rank #1. The fifth —
+`admin_add_drop_deadline.txt#1`, the chunk holding "through the end of week
+six" — now ranks **5th out of 5**, distance 0.502, because splitting the
+document created two other `admin_add_drop_deadline.txt` chunks (the add
+deadline, and the "nothing on the registrar's site" aside) that now compete
+with it for the same slots. It still clears the 0.6 gate and still lands
+inside `top_k=5`, so criterion 1 still counts it a pass — but only just.
+
+Real output, the two questions where the split mattered most:
+
+```
+How much is the student shuttle? — run 1
+The campus shuttle is free with a student ID.
+Source: transit_shuttle.txt
+```
+
+```
+What is the deadline to drop a class — run 1
+The deadline to drop a class is the end of week six, though dropping after
+week two will show as a "W" on your transcript (admin_add_drop_deadline.txt).
+```
+
+**Did it help?** It didn't flip any verdict — all five criteria were MET
+before and stayed MET after. But "didn't change the verdict" isn't the same
+as "didn't matter": before this change, criteria 1 and 4 passed because
+nothing was ever really tested (every chunk was a whole document). Now they
+pass because the answer actually survived being split away from the rest of
+its document, which is what those criteria were supposed to measure in the
+first place. The one place this got interesting is question 5: its
+answer-bearing chunk dropped from comfortably retrieved to the very last slot
+in `top_k=5`. That's a real, if narrow, margin — a slightly smaller `top_k`,
+or a slightly different sentence split, and this specific question would flip
+to a miss. The improvement made the test honest; it also showed the honest
+version has less margin than the old numbers implied.
 
 <!-- Say plainly whether it did, and how you know. If it made things worse,
      say that — a change that backfired, honestly reported, earns full credit
