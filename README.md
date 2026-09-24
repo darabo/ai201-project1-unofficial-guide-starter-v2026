@@ -30,7 +30,6 @@ Every document in `campus_life` is short: 183–554 characters, well under the 8
 
      Milestone 3. -->
 
-
 **Chunk 1** — source: `admin_add_drop_deadline.txt#0` — produced by: `chunker.py::split_documents`
 
 ```
@@ -115,18 +114,18 @@ This is a near-miss: the gate passed it (best distance 0.663, under the 0.7 cuto
 
 My cutoff is **0.6**.
 
-| Question | In corpus? | Best distance |
-|---|---|---|
-| How does the housing lottery work? | yes | 0.315 |
-| What do students say about the food options? | yes | 0.593 |
-| How do students feel about the workload? | yes | 0.455 |
-| What happens if I drop a course after the add/drop deadline? | yes | 0.253 |
-| How can I save money on textbooks? | yes | 0.362 |
-| What is the capital of Mongolia? | no | 0.825 |
-| How do I change the oil in a diesel engine? | no | 0.934 |
-| Who won the 1994 World Cup? | no | 0.886 |
-| What is the recommended dosage of ibuprofen for a headache? | no | 0.844 |
-| How do I write a for loop in Rust? | no | 0.896 |
+| Question                                                     | In corpus? | Best distance |
+| ------------------------------------------------------------ | ---------- | ------------- |
+| How does the housing lottery work?                           | yes        | 0.315         |
+| What do students say about the food options?                 | yes        | 0.593         |
+| How do students feel about the workload?                     | yes        | 0.455         |
+| What happens if I drop a course after the add/drop deadline? | yes        | 0.253         |
+| How can I save money on textbooks?                           | yes        | 0.362         |
+| What is the capital of Mongolia?                             | no         | 0.825         |
+| How do I change the oil in a diesel engine?                  | no         | 0.934         |
+| Who won the 1994 World Cup?                                  | no         | 0.886         |
+| What is the recommended dosage of ibuprofen for a headache?  | no         | 0.844         |
+| How do I write a for loop in Rust?                           | no         | 0.896         |
 
 ## How I Used AI
 
@@ -168,17 +167,83 @@ After running retrieval on all five of my test questions, three of them had noti
 
      Milestone 1. -->
 
-| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
-|---|---|---|---|---|---|
-| 1. Retrieved chunk contains the answer | 4 of 5 |  |  |  |  |
-| 2. Every answer names a source | 5 of 5 |  |  |  |  |
-| 3. Gate stops out-of-corpus questions | 4 of 5 |  |  |  |  |
-| 4. | | | | | |
-| 5. | | | | | |
+| Criterion                                    | Target | Run 1 | Run 2 | Run 3 | Verdict |
+| -------------------------------------------- | ------ | ----- | ----- | ----- | ------- |
+| 1. Retrieved chunk contains the answer       | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 2. Every answer names a source               | 5 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 3. Gate stops out-of-corpus questions        | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 4. Sampled chunks read as complete thoughts  | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 5. Named source contains the expected phrase | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
 
-<!-- Underneath, paste the REAL output for each criterion from one of your
-     runs — the actual text your system produced, not a description of it.
-     Name the file and function that produced it. -->
+Full per-question, per-run data: `results/run_2026-09-23_2116_before.md`.
+
+**Criterion 1** — `store.py::search`, chunks from `chunker.py::split_documents`. Every question's top-1 result is the correct document, e.g. for "When do parking permits go on sale?":
+
+```
+#   distance   source                           preview
+1   0.3423     admin_parking_permits.txt        On the parking permits  Student permits for the west...
+```
+
+That document is a single chunk (`admin_parking_permits.txt#0`), and its full text contains the answer:
+
+```
+On the parking permits
+
+Student permits for the west lots go on sale in August and sell out in about three days. The east lot never sells out because it's a 12-minute walk. There is no waitlist — people who miss the window park on Verrill Street and walk in, which is legal but unmarked and confuses everyone.
+```
+
+**Criterion 2** — `generate.py::answer_from_chunks`. Every answer names a source, e.g.:
+
+```
+Student permits for the west lots go on sale in August.
+
+Source: admin_parking_permits.txt
+```
+
+**Criterion 3** — `gate.py::check` via `run_eval.py::check_out_of_scope`:
+
+```
+| Out-of-scope question | Best distance | Gate |
+|---|---|---|
+| What is the capital of Mongolia? | 0.825 | refused |
+| How do I change the oil in a diesel engine? | 0.934 | refused |
+| Who won the 1994 World Cup? | 0.886 | refused |
+| What is the recommended dosage of ibuprofen for a headache? | 0.844 | refused |
+| How do I write a for loop in Rust? | 0.896 | refused |
+```
+
+**Criterion 4** — `chunker.py::split_documents` via `app.py::cmd_chunks` (spread sample of 5 across the corpus). Two of the five:
+
+```
+Chunk  |  source: admin_add_drop_deadline.txt#0  |  produced by: chunker.py::split_documents
+
+On the add/drop deadline
+
+You can add a course through the end of the second week. Dropping is a longer window — through the end of week six — but a drop after week two shows as a W on your transcript. Nothing anywhere on the registrar's site says this plainly, and students find out from each other.
+```
+
+```
+Chunk  |  source: housing_innisfree_hall.txt#0  |  produced by: chunker.py::split_documents
+
+Innisfree Hall — what it's actually like
+
+Transferred in last year, so take this with a grain of salt. Built 1991, renovated 2022. Rooms are doubles arranged as pairs sharing one bathroom between two rooms.
+
+The good: the shared-bathroom-between-two-rooms arrangement is the best compromise on campus.
+
+The bad: no air conditioning, which matters for the first three weeks of September.
+
+Laundry costs $1.75 wash, $1.75 dry, app-based. On noise: moderate; the building is L-shaped and the short wing is much quieter.
+```
+
+**Criterion 5** — named source document checked against `expects` in `questions.py`:
+
+```
+Q: What are the graduation requirements?
+Answer cites: admin_graduation_requirements.txt
+expects: "120"
+admin_graduation_requirements.txt: "120 credit hours, a completed major, and the general education requirements..."
+```
 
 ## Verdicts
 
@@ -191,13 +256,15 @@ After running retrieval on all five of my test questions, three of them had noti
 
      Milestone 2. -->
 
-| # | Criterion | Verdict | How I decided |
-|---|---|---|---|
-| 1 |  |  |  |
-| 2 |  |  |  |
-| 3 |  |  |  |
-| 4 |  |  |  |
-| 5 |  |  |  |
+| #   | Criterion                                 | Verdict | How I decided                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Retrieved chunk contains the answer       | MET     | `python app.py retrieve` on all 5 questions: the top-1 result is always the correct document, and every one of those documents turns out to be a single chunk, so the answer is never split away from what got retrieved. 5/5, not 4/5.                                                                                                                                        |
+| 2   | Every answer names a source               | MET     | Read all 15 answers (5 questions × 3 runs) in the run log; every one names at least one source file, either as an explicit "Source:" line or an inline citation. 15/15.                                                                                                                                                                                                        |
+| 3   | Gate stops out-of-corpus questions        | MET     | Directly from `run_eval.py::check_out_of_scope`: all 5 out-of-scope questions were refused, with distances (0.82–0.93) well clear of the 0.6 cutoff.                                                                                                                                                                                                                           |
+| 4   | Sampled chunks read as complete thoughts  | MET     | `python app.py chunks` on a 5-chunk spread sample: each one is a full, self-contained post with no sentence cut at either edge. This follows from the same fact as criterion 1 — the corpus has 88 documents and produces exactly 88 chunks, so no document is ever split, and "does the chunk read as complete" reduces to "is the source post itself coherent," which it is. |
+| 5   | Named source contains the expected phrase | MET     | For each question, checked the document the answer cited against the `expects` value in `questions.py`: `admin_parking_permits.txt` contains "August", `transit_shuttle.txt` contains "7am to 11pm" and "free", `admin_graduation_requirements.txt` contains "120", `admin_add_drop_deadline.txt` contains "end of week six". 5/5.                                             |
+
+Every criterion cleared its target, several at 5/5 against a 4/5 bar. That's not evidence the system is unusually strong, it's evidence that criteria 1 and 4 in particular were close to unmissable by construction: nothing in this corpus is long enough for `chunker.py` to ever split a document, so "the chunk has the answer" and "the chunk is a complete thought" were never really at risk once retrieval found the right document. Worth tightening in a future unit, see What I'd Do Differently.
 
 ## Diagnoses
 
@@ -219,6 +286,39 @@ After running retrieval on all five of my test questions, three of them had noti
 
      Milestone 3. -->
 
+Nothing was missed — all five criteria came out MET (see Verdicts above). So
+there's no failure to trace to a pipeline stage. What there is instead is a
+reason two of those targets couldn't really have failed, and it traces to one
+stage: chunking.
+
+**Stage: chunking (`chunker.py::split_documents`).** The function only splits
+a document into multiple chunks once it's longer than 650 characters — below
+that, the whole document becomes chunk `#0` and the paragraph/sentence-boundary
+logic never runs. Running `python chunker.py` on the corpus shows why that
+threshold never engages: `campus_life` produces 88 chunks from 88 documents,
+average 317 characters, longest only 549. No document in this corpus reaches
+650 characters, so `split_documents` has never executed its actual splitting
+branch — every chunk it has ever produced here is one whole document.
+
+That's the mechanism behind criteria 1 and 4 both landing at 5/5 against a 4/5
+target: criterion 1 ("retrieved chunk contains the answer") can't fail unless
+retrieval picks the wrong document, because there's no such thing as a chunk
+that's *part of* a document here. Criterion 4 ("chunks read as complete
+thoughts") can't fail either, for the same reason — every "chunk" I sampled is
+just a full post someone wrote to already read as one complete thought.
+Neither criterion has ever tested what happens when a document actually gets
+cut in two.
+
+**Pattern:** these aren't two independent easy passes, they're the same root
+cause twice — a chunk-size threshold that this corpus never crosses.
+
+**What I'd tighten:** criterion 1's target, from "4 of 5 questions have the
+answer in a retrieved chunk" to something that's actually at risk of failing,
+e.g. lowering `CHUNK_SIZE`/the 650-character threshold enough that at least
+some of my 5 answer documents get split, then requiring the answer survive
+being retrieved from a partial chunk. As written, the target was safe by
+construction, not because retrieval is strong.
+
 ## The Improvement
 
 **What I changed:**
@@ -233,13 +333,13 @@ After running retrieval on all five of my test questions, three of them had noti
 <!-- Same format, same five criteria, three runs each.
      `python run_eval.py --label after` -->
 
-| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
-|---|---|---|---|---|---|
-| 1. Retrieved chunk contains the answer | 4 of 5 |  |  |  |  |
-| 2. Every answer names a source | 5 of 5 |  |  |  |  |
-| 3. Gate stops out-of-corpus questions | 4 of 5 |  |  |  |  |
-| 4. | | | | | |
-| 5. | | | | | |
+| Criterion                              | Target | Run 1 | Run 2 | Run 3 | Verdict |
+| -------------------------------------- | ------ | ----- | ----- | ----- | ------- |
+| 1. Retrieved chunk contains the answer | 4 of 5 |       |       |       |         |
+| 2. Every answer names a source         | 5 of 5 |       |       |       |         |
+| 3. Gate stops out-of-corpus questions  | 4 of 5 |       |       |       |         |
+| 4.                                     |        |       |       |       |         |
+| 5.                                     |        |       |       |       |         |
 
 **Did it help?**
 
