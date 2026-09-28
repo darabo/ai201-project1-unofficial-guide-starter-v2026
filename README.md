@@ -146,23 +146,7 @@ For Unit 2, I built `scorer.py`'s `judge()` as an exact substring check, and eve
 
 Later, after all five criteria came back MET with nothing to diagnose, I asked Claude to check whether that was a real result or a target set too low. It ran `python chunker.py` and found the corpus's longest document was 549 characters against my chunker's 650-character single-chunk cutoff — meaning `split_documents` had never actually split anything. The two "easy" criteria (chunk contains the answer, chunk reads as complete) had never been tested against a real chunk boundary. That diagnosis is what the Milestone 4 chunking rewrite was built to test.
 
-For the Unit 2 stretch, I gave Claude Code the grading rubric and my first
-Unit 2 grade (13 of 15) and asked why. It matched each rubric line against
-the README and the results files and traced the gap to one rule: the two
-points for "every miss names a pipeline stage" aren't available when nothing
-was missed, and all five of my criteria were MET — so 13 was the ceiling for
-that submission. It re-ran the chunker and retrieval read-only to check that
-the all-MET result was real rather than a scoring mistake (it was). It also
-flagged that my `expects` edits in `questions.py` amounted to changing
-criterion 5's yardstick without a recorded revision in `criteria.md`. For
-the second improvement it recommended lowering `top_k` over hybrid search,
-because my own What's Still Broken said criterion 1 passed only because the
-window was exactly 5 wide, and a one-line change would test that directly.
-I went with that. It then made the change, ran `run_eval.py`, and drafted
-the Run Log — After 2 from the results file; the criterion 5 call — MET
-against the criterion as written, even though the scorer fails the same
-question — is the part of that draft I read most carefully, because it's
-where the criterion and the scorer disagree.
+Started Stretch goals for Unit 2.
 
 <!-- ── Stretch features ─────────────────────────────────────────────────────
      Doing one? Say so here BEFORE you start. A feature this README never
@@ -471,7 +455,7 @@ see the add-deadline half of that document.
 | 5. Named source contains the expected phrase | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
 
 Full per-question, per-run data: `results/run_2026-09-27_2131_after2.md`.
-The same file's `scorer.py::judge` column — does the *answer text* contain
+The same file's `scorer.py::judge` column — does the _answer text_ contain
 `expects` — reads 4/5 in every run, because the drop-deadline question
 fails all three times:
 
@@ -512,7 +496,7 @@ source, including the three where the model declines. Drop-deadline, run 1
 (runs 2 and 3 differ only by "state" vs. "mention"):
 
 ```
-Based on the provided documents, you can add a course through the end of the second week, but the documents do not state the deadline to drop a class. 
+Based on the provided documents, you can add a course through the end of the second week, but the documents do not state the deadline to drop a class.
 
 Source: admin_add_drop_deadline.txt
 ```
@@ -553,7 +537,7 @@ Expect 8 to 10 hours a week outside class. The one piece of advice: do the labs 
 
 Each is a complete sentence with nothing cut at either edge, so 5/5 against
 the criterion as written. Chunk 1 is also exactly what the model was handed
-for the drop question: a complete thought about the *add* deadline.
+for the drop question: a complete thought about the _add_ deadline.
 
 **Criterion 5** — this is where the change exposed something. The
 drop-deadline answers all cite `admin_add_drop_deadline.txt`, and that file
@@ -615,7 +599,7 @@ direction.
 > the week-six chunk fell out of the window and the answer went from correct
 > in 3 of 3 runs to "the documents do not state the deadline" in 3 of 3.
 > That rules out the window as the fix. What's actually wrong is the
-> *ranking*: after the sentence split, two other chunks from the same
+> _ranking_: after the sentence split, two other chunks from the same
 > document (the add deadline, and the registrar aside) sit closer to the
 > query than the one with the answer. The change that would address that is
 > hybrid search — BM25 would weight the exact words "drop" and "deadline",
