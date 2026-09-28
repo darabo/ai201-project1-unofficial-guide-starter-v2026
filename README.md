@@ -142,6 +142,10 @@ I asked Claude Code to replace the starter's fixed-size chunking function for Mi
 
 After running retrieval on all five of my test questions, three of them had noticeably worse best-distances (0.64–0.68) than the other two. I asked Claude to check why. It grepped the corpus for the keywords in each question's `expects` field and found that three of my questions — "student population," "academic support," "extracurricular activities" — had expected answers that didn't match anything actually in the corpus; they read like leftover placeholder text rather than something written for `campus_life`. I had it rewrite those three questions using real document content instead (the housing lottery, the add/drop deadline, and textbook costs), each with an `expects` value pulled from the actual source text, which dropped their best-distances to 0.25–0.36.
 
+For Unit 2, I built `scorer.py`'s `judge()` as an exact substring check, and every question came back failing. I asked Claude Code why, and it traced it to two separate problems: the check required my full `expects` sentences to appear verbatim in the model's paraphrased answers, and separately, my `expects` values didn't match the corpus's own wording (12-hour clock notation, "student shuttle" vs. "campus shuttle"). I rewrote `expects` into short phrases myself, then iterated twice more when two of the five still failed — once on spacing ("7 am" vs. "7am") and once on an inserted word ("120 hours" vs. "120 credit hours") — asking each time what specifically didn't match rather than asking it to patch the code.
+
+Later, after all five criteria came back MET with nothing to diagnose, I asked Claude to check whether that was a real result or a target set too low. It ran `python chunker.py` and found the corpus's longest document was 549 characters against my chunker's 650-character single-chunk cutoff — meaning `split_documents` had never actually split anything. The two "easy" criteria (chunk contains the answer, chunk reads as complete) had never been tested against a real chunk boundary. That diagnosis is what the Milestone 4 chunking rewrite was built to test.
+
 <!-- ── Stretch features ─────────────────────────────────────────────────────
      Doing one? Say so here BEFORE you start. A feature this README never
      claims earns nothing.
@@ -303,7 +307,7 @@ branch — every chunk it has ever produced here is one whole document.
 That's the mechanism behind criteria 1 and 4 both landing at 5/5 against a 4/5
 target: criterion 1 ("retrieved chunk contains the answer") can't fail unless
 retrieval picks the wrong document, because there's no such thing as a chunk
-that's *part of* a document here. Criterion 4 ("chunks read as complete
+that's _part of_ a document here. Criterion 4 ("chunks read as complete
 thoughts") can't fail either, for the same reason — every "chunk" I sampled is
 just a full post someone wrote to already read as one complete thought.
 Neither criterion has ever tested what happens when a document actually gets
@@ -344,13 +348,13 @@ against it.
 <!-- Same format, same five criteria, three runs each.
      `python run_eval.py --label after` -->
 
-| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
-|---|---|---|---|---|---|
-| 1. Retrieved chunk contains the answer | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
-| 2. Every answer names a source | 5 of 5 | 5/5 | 5/5 | 5/5 | MET |
-| 3. Gate stops out-of-corpus questions | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
-| 4. Sampled chunks read as complete thoughts | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
-| 5. Named source contains the expected phrase | 4 of 5 | 5/5 | 5/5 | 5/5 | MET |
+| Criterion                                    | Target | Run 1 | Run 2 | Run 3 | Verdict |
+| -------------------------------------------- | ------ | ----- | ----- | ----- | ------- |
+| 1. Retrieved chunk contains the answer       | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 2. Every answer names a source               | 5 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 3. Gate stops out-of-corpus questions        | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 4. Sampled chunks read as complete thoughts  | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 5. Named source contains the expected phrase | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
 
 Full per-question, per-run data: `results/run_2026-09-23_2149_after.md`.
 
@@ -408,17 +412,60 @@ version has less margin than the old numbers implied.
 
 ## What's Still Broken
 
-<!-- For each criterion still missed after your fix: what you'd do about it,
-     and why you stopped where you did.
+Nothing is currently MISSED — all five criteria are MET after the
+improvement (see Run Log — After). But two things are closer to failing
+than a clean "MET" suggests, and I'm naming them rather than letting the
+verdict hide them:
 
-     "I ran out of time" is fine if it's true. Pretending nothing is left is
-     not.
+**Criterion 1's margin on question 5.** The "week six" chunk from
+`admin_add_drop_deadline.txt` now ranks 5th of 5 in retrieval (distance
+0.502) — it still counts as a pass, but only because `top_k` happens to be 5. What I'd do about it: either raise `top_k` for this question's topic
+cluster, or tune `SINGLE_CHUNK_LIMIT` so a document doesn't compete against
+its own siblings for the same slots. Why I stopped: Milestone 4's rule is
+one change per unit, and I already spent it making chunking real in the
+first place. Tuning further right now would mean adjusting parameters until
+this one question looks safe again — which is exactly the "target passes by
+construction" problem Milestone 3 diagnosed, just approached from the other
+direction.
 
-     Milestone 5. -->
+**Criterion 3's shrinking gate margin.** Out-of-scope distances moved from
+0.844–0.934 (before) to 0.825–0.871 (after) — still comfortably past the 0.6
+cutoff, but the smaller, more topic-specific chunks are pulling every
+distance down a little, including for questions the corpus doesn't cover.
+What I'd do: redo the two-group distance comparison from Milestone 4 of Unit
+1 (in-corpus vs. out-of-scope) against the new chunker, instead of assuming
+the old 0.6 cutoff still sits in the gap. Why I stopped: that's a second,
+separate tuning question — the gate, not the chunker — and this unit's rule
+was one change.
+
+**Criterion 4's sample coverage.** The rewritten chunker turned 88 chunks
+into 220, but I kept sampling 5 for the completeness check — that's under
+half the coverage (as a fraction of the corpus) it used to be. I didn't
+expand it because the criterion as written names a flat count of 5, not a
+percentage.
 
 ## What I'd Do Differently
 
-<!-- Knowing what you know now — which of your five criteria would you write
-     differently, and why?
+**Criterion 1** — I'd rewrite the target itself, not just tighten it.
+"4 of 5 questions have the answer in a retrieved chunk" treats a chunk
+landing at rank 1 the same as rank 5 of `top_k=5` — both just count as a
+pass. Milestone 4 showed a question can sit at either extreme depending on
+chunk boundaries, and the criterion can't tell the difference. Next time:
+"the answer-bearing chunk ranks in the top 3 of retrieval for at least 4 of
+5 questions" — something where a result like question 5's would actually
+register as a miss instead of hiding inside a wide top-5 window.
 
-     Milestone 5. -->
+**Criterion 5** — I'd write it to match what my scorer actually checks. As
+written, it asks whether the _source document named in the answer_ contains
+the `expects` phrase; `scorer.py::judge` instead checks whether the
+_generated answer text_ contains it — a different check. I never reconciled
+the two, so the Verdicts table's evidence for criterion 5 came from a
+manual, by-hand check of each source document, separate from the automated
+pass/fail column `run_eval.py` produces. Writing the criterion to describe
+what the scorer actually measures would remove that manual step on every
+future run.
+
+**Criterion 4** — I'd tie the sample size to the corpus instead of a fixed
+count, e.g. "at least 5% of chunks, or 5, whichever is greater," so the
+criterion's rigor doesn't quietly halve itself the next time the chunking
+strategy changes the chunk count.
