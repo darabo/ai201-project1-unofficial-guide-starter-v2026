@@ -33,7 +33,10 @@ CHUNK_OVERLAP = 120     # characters shared between neighbouring chunks
 
 # ─── Retrieval (Milestone 4) ─────────────────────────────────────────────────
 
-TOP_K = 5               # how many chunks to pull back per question
+TOP_K = 3               # how many chunks to pull back per question
+                        # Unit 2 stretch (second improvement): was 5. Lowered to 3 to
+                        # test whether criterion 1 depended on the window being exactly
+                        # 5 wide, and to give the model less off-topic material.
 
 # The relevance gate. If the best chunk is further away than this, the system
 # refuses to answer instead of handing the model thin material.

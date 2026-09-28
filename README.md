@@ -146,6 +146,24 @@ For Unit 2, I built `scorer.py`'s `judge()` as an exact substring check, and eve
 
 Later, after all five criteria came back MET with nothing to diagnose, I asked Claude to check whether that was a real result or a target set too low. It ran `python chunker.py` and found the corpus's longest document was 549 characters against my chunker's 650-character single-chunk cutoff — meaning `split_documents` had never actually split anything. The two "easy" criteria (chunk contains the answer, chunk reads as complete) had never been tested against a real chunk boundary. That diagnosis is what the Milestone 4 chunking rewrite was built to test.
 
+For the Unit 2 stretch, I gave Claude Code the grading rubric and my first
+Unit 2 grade (13 of 15) and asked why. It matched each rubric line against
+the README and the results files and traced the gap to one rule: the two
+points for "every miss names a pipeline stage" aren't available when nothing
+was missed, and all five of my criteria were MET — so 13 was the ceiling for
+that submission. It re-ran the chunker and retrieval read-only to check that
+the all-MET result was real rather than a scoring mistake (it was). It also
+flagged that my `expects` edits in `questions.py` amounted to changing
+criterion 5's yardstick without a recorded revision in `criteria.md`. For
+the second improvement it recommended lowering `top_k` over hybrid search,
+because my own What's Still Broken said criterion 1 passed only because the
+window was exactly 5 wide, and a one-line change would test that directly.
+I went with that. It then made the change, ran `run_eval.py`, and drafted
+the Run Log — After 2 from the results file; the criterion 5 call — MET
+against the criterion as written, even though the scorer fails the same
+question — is the part of that draft I read most carefully, because it's
+where the criterion and the scorer disagree.
+
 <!-- ── Stretch features ─────────────────────────────────────────────────────
      Doing one? Say so here BEFORE you start. A feature this README never
      claims earns nothing.
@@ -410,6 +428,170 @@ version has less margin than the old numbers implied.
 
      Milestone 4. -->
 
+## Stretch — A Second Measured Improvement
+
+<!-- Stretch item from the unit 2 list: a second change from the Milestone 4
+     menu, run and logged the same way as the first. Declared here BEFORE
+     building it — the commit that adds this section changes nothing else. -->
+
+**Declared before building.** I'm making a second change from the Milestone 4
+menu: lowering `TOP_K` in `config.py` from 5 to 3. Nothing else changes; the
+sentence-boundary chunker from The Improvement stays in place, so this is
+measured on top of it, not instead of it.
+
+**Which weakness it targets:** the first item in What's Still Broken. After
+the chunking change, the answer-bearing chunk for "What is the deadline to
+drop a class" (`admin_add_drop_deadline.txt#1`, "through the end of week six")
+ranks 5th of 5 at distance 0.502 — criterion 1 passes for that question only
+because the retrieval window is exactly 5 wide. A narrower window does two
+things at once: it tests whether that pass was real or an accident of `top_k`,
+and it hands the model less off-topic material (for that question, two of the
+five retrieved chunks come from `admin_grade_appeals.txt` and
+`admin_pass_fail_option.txt`, which have nothing to do with dropping a class).
+
+**How I'll measure it:** `python run_eval.py --label after2`, then the same
+five-criterion table as the two logs above, real output pasted underneath,
+and a plain statement of whether it helped — including if it made things
+worse. My expectation going in: criterion 1 drops to 4/5 (still MET at a
+4-of-5 target) because the week-six chunk falls outside the top 3, and the
+drop-deadline answer itself probably gets worse, since the model will only
+see the add-deadline half of that document.
+
+### Run Log — After 2
+
+<!-- Same format, same five criteria, three runs each.
+     `python run_eval.py --label after2`, with TOP_K = 3. -->
+
+| Criterion                                    | Target | Run 1 | Run 2 | Run 3 | Verdict |
+| -------------------------------------------- | ------ | ----- | ----- | ----- | ------- |
+| 1. Retrieved chunk contains the answer       | 4 of 5 | 4/5   | 4/5   | 4/5   | MET     |
+| 2. Every answer names a source               | 5 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 3. Gate stops out-of-corpus questions        | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 4. Sampled chunks read as complete thoughts  | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+| 5. Named source contains the expected phrase | 4 of 5 | 5/5   | 5/5   | 5/5   | MET     |
+
+Full per-question, per-run data: `results/run_2026-09-27_2131_after2.md`.
+The same file's `scorer.py::judge` column — does the *answer text* contain
+`expects` — reads 4/5 in every run, because the drop-deadline question
+fails all three times:
+
+```
+| Question | Run 1 | Run 2 | Run 3 |
+|---|---|---|---|
+| When do parking permits go on sale? | pass | pass | pass |
+| What are the hours of the campus shuttle? | pass | pass | pass |
+| What are the graduation requirements? | pass | pass | pass |
+| How much is the student shuttle? | pass | pass | pass |
+| What is the deadline to drop a class | fail | fail | fail |
+```
+
+**Criterion 1** — `store.py::search` via `app.py::cmd_retrieve`, now
+`top_k=3`. The other four questions still put the answer chunk at rank 1
+(distances 0.308, 0.281, 0.274, 0.523, unchanged from the after log). The
+drop-deadline question no longer retrieves the chunk that holds the answer:
+
+```
+Question: What is the deadline to drop a class
+
+#   distance   source                           preview
+1   0.3954     admin_add_drop_deadline.txt      On the add/drop deadline  You can add a course throu...
+2   0.4187     admin_add_drop_deadline.txt      On the add/drop deadline  Nothing anywhere on the re...
+3   0.4868     admin_grade_appeals.txt          On the grade appeals  Skipping the instructor step g...
+
+Gate: best distance 0.395 is under the 0.6 cutoff
+```
+
+Ranks 1 and 2 are `admin_add_drop_deadline.txt#0` (the add deadline) and
+`#2` (the "nothing on the registrar's site" aside). `#1` — "Dropping is a
+longer window — through the end of week six" — was rank 5 at 0.502 in the
+after log and is now outside the window. Retrieval is deterministic, so this
+is one number in all three columns: 4/5.
+
+**Criterion 2** — `generate.py::answer_from_chunks`. All 15 answers name a
+source, including the three where the model declines. Drop-deadline, run 1
+(runs 2 and 3 differ only by "state" vs. "mention"):
+
+```
+Based on the provided documents, you can add a course through the end of the second week, but the documents do not state the deadline to drop a class. 
+
+Source: admin_add_drop_deadline.txt
+```
+
+**Criterion 3** — `gate.py::check` via `run_eval.py::check_out_of_scope`.
+`top_k` doesn't change the best distance, so this is identical to the after
+log:
+
+```
+| Out-of-scope question | Best distance | Gate |
+|---|---|---|
+| What is the capital of Mongolia? | 0.825 | refused |
+| How do I change the oil in a diesel engine? | 0.871 | refused |
+| Who won the 1994 World Cup? | 0.858 | refused |
+| What is the recommended dosage of ibuprofen for a headache? | 0.833 | refused |
+| How do I write a for loop in Rust? | 0.864 | refused |
+```
+
+**Criterion 4** — `chunker.py::split_documents` via `app.py::cmd_chunks`.
+`top_k` doesn't touch chunking, so the index is the same 220 chunks as the
+after log. The 5-chunk spread sample from the current index, first two:
+
+```
+Chunk 1  |  source: admin_add_drop_deadline.txt#0  |  produced by: chunker.py::split_documents
+
+On the add/drop deadline
+
+You can add a course through the end of the second week.
+```
+
+```
+Chunk 2  |  source: course_cs_210.txt#2  |  produced by: chunker.py::split_documents
+
+CS 210 Data Structures
+
+Expect 8 to 10 hours a week outside class. The one piece of advice: do the labs even though they're only 10% — the exams reuse the lab problems.
+```
+
+Each is a complete sentence with nothing cut at either edge, so 5/5 against
+the criterion as written. Chunk 1 is also exactly what the model was handed
+for the drop question: a complete thought about the *add* deadline.
+
+**Criterion 5** — this is where the change exposed something. The
+drop-deadline answers all cite `admin_add_drop_deadline.txt`, and that file
+does contain "end of week six" — so the criterion as written ("the source
+document named in the answer contains the expected phrase") passes, 5/5,
+even though the answer itself says the documents don't state the deadline.
+The criterion checks the file, not the answer, and can't tell a correct
+answer from a non-answer that names the right file. `scorer.py::judge`,
+which checks the answer text, fails the same question three times. I've
+kept the verdict against the criterion as written, and recorded what it
+missed here rather than quietly swapping in the scorer's number.
+
+**Did it help?** No — and this time the numbers move, which the first
+improvement's didn't:
+
+| Measure                                  | Before (top_k 5, old chunker) | After (top_k 5, new chunker) | After 2 (top_k 3, new chunker) |
+| ---------------------------------------- | ----------------------------- | ---------------------------- | ------------------------------ |
+| Criterion 1, all three runs              | 5/5                           | 5/5                          | 4/5                            |
+| `scorer.py` passes, out of 15            | 15                            | 15                           | 12                             |
+| Drop-deadline answer                     | "end of week six" ×3          | "end of week six" ×3         | "documents do not state" ×3    |
+| Rank of the week-six chunk               | 1 (whole document)            | 5                            | not retrieved                  |
+| Off-topic chunks handed to the model, Q5 | 3 of 5                        | 2 of 5                       | 1 of 3                         |
+
+No verdict flipped: 4/5 still clears a 4-of-5 target, so the table says MET
+across the board. But the system got worse at the one question the change
+was aimed at. The narrower window did remove off-topic material (the last
+row), and the other four answers are unchanged and still correct — but it
+also removed the only chunk that answered the question, and the model did
+the right thing with what it was given: it declined instead of guessing. So
+the diagnosis in What's Still Broken was right that criterion 1's pass
+depended on the window being exactly 5 wide, and wrong about what to do
+about it. The problem isn't the window size; it's that the week-six chunk
+ranks behind two sibling chunks from its own document. Shrinking `top_k`
+can't fix a ranking problem, it can only hide or expose it. I'm leaving
+`TOP_K = 3` in `config.py` because the stretch requires the change to be
+present in the repository; the after log (top_k 5) remains the better
+configuration for this corpus.
+
 ## What's Still Broken
 
 Nothing is currently MISSED — all five criteria are MET after the
@@ -427,6 +609,19 @@ first place. Tuning further right now would mean adjusting parameters until
 this one question looks safe again — which is exactly the "target passes by
 construction" problem Milestone 3 diagnosed, just approached from the other
 direction.
+
+> **Update after the stretch:** I did spend a second change on this
+> (`TOP_K` 5 → 3, see Stretch above), and it confirmed the margin was real:
+> the week-six chunk fell out of the window and the answer went from correct
+> in 3 of 3 runs to "the documents do not state the deadline" in 3 of 3.
+> That rules out the window as the fix. What's actually wrong is the
+> *ranking*: after the sentence split, two other chunks from the same
+> document (the add deadline, and the registrar aside) sit closer to the
+> query than the one with the answer. The change that would address that is
+> hybrid search — BM25 would weight the exact words "drop" and "deadline",
+> which the week-six chunk has and the aside doesn't — or merging sibling
+> chunks back together at retrieval time. I stopped there because the stretch
+> is one change too, and I chose the cheaper one to test the diagnosis first.
 
 **Criterion 3's shrinking gate margin.** Out-of-scope distances moved from
 0.844–0.934 (before) to 0.825–0.871 (after) — still comfortably past the 0.6
